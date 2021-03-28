@@ -8,6 +8,7 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedOptions;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.PackageElement;
@@ -21,15 +22,18 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 
+@SupportedOptions("customSubtypes")
 public class ClassIndexProcessor extends AbstractProcessor {
 
     private Filer filer;
     private AnnotationTypeWriter annotationTypeWriter;
     private SubtypesTypeWriter subtypesTypeWriter;
     private ElementUtility elementUtility;
+    private List<String> customSubtypes;
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
@@ -48,6 +52,12 @@ public class ClassIndexProcessor extends AbstractProcessor {
             // Subtypes index. classes under index.
             processSubtypeIndexByDirectMarked(roundEnv, annotation);
         }
+        String customSubtypesString = processingEnv.getOptions().get("customSubtypes");
+        if (customSubtypesString != null) {
+            customSubtypes = Arrays.asList(customSubtypesString.split(";"));
+        } else {
+            customSubtypes = Collections.emptyList();
+        }
         // Subtypes index. every class, which can have interface with `@IndexInherited` annotation.
         processSubtypeIndexInReverseWay(roundEnv);
 
@@ -65,9 +75,10 @@ public class ClassIndexProcessor extends AbstractProcessor {
                 while (!supers.isEmpty()) {
                     TypeMirror candidate = supers.poll();
                     if (candidate.getKind() != TypeKind.NONE) {
+                        String typeName = elementUtility.getTypes().erasure(candidate).toString();
                         if (elementUtility.hasStereotype(elementUtility.getTypes().asElement(candidate),
-                                Collections.singletonList(IndexInherited.class.getName())))
-                            subtypesTypeWriter.writeSubType(elementUtility.getTypes().erasure(candidate).toString(), elementUtility.getTypes().erasure(type.asType()).toString());
+                                Collections.singletonList(IndexInherited.class.getName())) || customSubtypes.contains(typeName))
+                            subtypesTypeWriter.writeSubType(typeName, elementUtility.getTypes().erasure(type.asType()).toString());
                         supers.addAll(elementUtility.getTypes().directSupertypes(candidate));
                     }
                 }
@@ -85,9 +96,10 @@ public class ClassIndexProcessor extends AbstractProcessor {
                     while (!supers.isEmpty()) {
                         TypeMirror candidate = supers.poll();
                         if (candidate.getKind() != TypeKind.NONE) {
+                            String typeName = elementUtility.getTypes().erasure(candidate).toString();
                             if (elementUtility.hasStereotype(elementUtility.getTypes().asElement(candidate),
-                                    Collections.singletonList(IndexInherited.class.getName())))
-                                subtypesTypeWriter.writeSubType(elementUtility.getTypes().erasure(candidate).toString(), elementUtility.getTypes().erasure(type.asType()).toString());
+                                    Collections.singletonList(IndexInherited.class.getName())) || customSubtypes.contains(typeName))
+                                subtypesTypeWriter.writeSubType(typeName, elementUtility.getTypes().erasure(type.asType()).toString());
                             supers.addAll(elementUtility.getTypes().directSupertypes(candidate));
                         }
                     }
